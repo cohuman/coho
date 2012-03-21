@@ -7,6 +7,7 @@ require 'pp'
 require 'json'
 require 'oauth'
 require 'oauth/consumer'
+require 'rest-client'
 
 require './page'
 
@@ -26,30 +27,27 @@ end
 
 class Cohuman
   def self.credentials
-    @credentials ||= if ENV['COHUMAN_API_KEY']
-      {:key => ENV['COHUMAN_API_KEY'], :secret => ENV['COHUMAN_API_SECRET']}
-    else
-      begin
-        here = File.expand_path(File.dirname(__FILE__))
-        YAML.load( File.read( "#{here}/config/cohuman.yml") )
-      rescue Errno::ENOENT
-        nil
-      end
-    end
+    {
+      :key => '29f16b7cef111cb8223614ca38080c8f6fdb2651',
+      :secret => '82916a0c268d306ec8252367db6f9758d8f0625b'
+    }
   end
 
   def self.consumer
+    puts "---===---"
+    puts credentials[:key]
+    puts credentials[:secret]
     @consumer ||= OAuth::Consumer.new( credentials[:key], credentials[:secret], {
-      :site => 'http://api.cohuman.com',
+      :site => 'http://localhost:3000',
       :request_token_path => '/api/token/request',
       :authorize_path => '/api/authorize',
       :access_token_path => '/api/token/access'
-      })
+    })
   end
   
   def self.api_url(path)
     path.gsub!(/^\//,'') # removes leading slash from path
-    url = "http://api.cohuman.com/#{path}"
+    url = "http://localhost:3000/#{path}"
   end
   
 end
@@ -66,8 +64,13 @@ end
 
 get "/authorize" do
   if Cohuman.credentials
-    request_token = Cohuman.consumer.get_request_token(:oauth_callback=>"#{request.site}/authorized")
+    request_token = Cohuman.consumer.get_request_token(
+      :oauth_callback=>"#{request.site}/api/authorize"
+    )
     session[:request_token] = request_token
+    puts "______ Request Token"
+    puts request_token.inspect
+    puts "Redirecting to " + request_token.authorize_url
     redirect request_token.authorize_url
   else
     erector {
@@ -128,18 +131,32 @@ end
 def get_and_render(path)
   url = Cohuman.api_url(path)
   response = session[:access_token].get(url, {"Content-Type" => "application/json"})
-  result = JSON.parse(response.body)
-  render_page(url, result)
+  render_page(url, JSON.parse(response.body))
 end
 
+# Do it through the Oauth gem
 get "/tasks" do
-  get_and_render "/tasks"
+  url = "http://localhost:3000/tasks"
+  response = session[:access_token].get(url, {"Content-Type" => "application/json"})
+  render_page(url, JSON.parse(response.body))
 end
 
+# Do it with rest-client
 get "/users" do
-  get_and_render "/users?limit=0"
+  RestClient.add_before_execution_proc do |req, params|
+    session[:access_token].sign! req
+  end
+  url = "http://localhost:3000/users?limit=5"
+  response = RestClient.get(url, "Content-Type" => "application/json")
+  puts response.inspect
+  render_page(url, JSON.parse(response))
 end
 
+# Do a POST with the oauth gem
 get "/projects" do
-  get_and_render "/projects?limit=0"
+  url = 'http://localhost:3000/task/1643785/comment'
+  response = session[:access_token].post(url, {:text => 'Hello Then', :format => 'json'}, {"Content-Type" => "application/json"})
+  render_page(url, JSON.parse(response.body))
 end
+
+
