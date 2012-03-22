@@ -8,6 +8,7 @@ require 'json'
 require 'oauth'
 require 'oauth/consumer'
 require 'rest-client'
+require 'net/http/post/multipart'
 
 require './page'
 
@@ -34,9 +35,6 @@ class Cohuman
   end
 
   def self.consumer
-    puts "---===---"
-    puts credentials[:key]
-    puts credentials[:secret]
     @consumer ||= OAuth::Consumer.new( credentials[:key], credentials[:secret], {
       :site => 'http://localhost:3000',
       :request_token_path => '/api/token/request',
@@ -148,15 +146,33 @@ get "/users" do
   end
   url = "http://localhost:3000/users?limit=5"
   response = RestClient.get(url, "Content-Type" => "application/json")
-  puts response.inspect
   render_page(url, JSON.parse(response))
 end
 
-# Do a POST with the oauth gem
 get "/projects" do
+  # Based on https://gist.github.com/1075327
+  url = "/task/1643785/attachment"
+  File.open("./public/coho_salmon.jpg") do |image|
+    #noinspection RubyArgCount
+    req = Net::HTTP::Post::Multipart.new(
+      url,
+      'format' => 'json',
+      'attachment[type]' => 'cohuman_attachment',
+      'cohuman_attachment[blob]' => UploadIO.new(image, "image/jpeg", "image.jpg")
+    )
+    session[:access_token].sign! req
+    res = Net::HTTP.start('localhost', 3000) do |http|
+      http.request(req)
+    end
+    puts res.inspect
+    render_page(url, JSON.parse(res.body))
+  end
+end
+
+
+# Do a POST with the oauth gem
+get "/post_a_comment" do
   url = 'http://localhost:3000/task/1643785/comment'
   response = session[:access_token].post(url, {:text => 'Hello Then', :format => 'json'}, {"Content-Type" => "application/json"})
   render_page(url, JSON.parse(response.body))
 end
-
-

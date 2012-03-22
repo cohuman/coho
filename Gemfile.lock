@@ -6,6 +6,7 @@ GEM
       treetop (>= 1.2.3)
     json (1.5.1)
     mime-types (1.17.2)
+    multipart-post (1.1.5)
     oauth (0.4.4)
     polyglot (0.3.1)
     rack (1.2.1)
@@ -25,6 +26,7 @@ PLATFORMS
 DEPENDENCIES
   erector
   json
+  multipart-post
   oauth
   rest-client
   sinatra
